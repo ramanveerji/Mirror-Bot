@@ -308,10 +308,7 @@ class GoogleDriveHelper:
             LOGGER.info(f"Delete Result: {msg}")
         except HttpError as err:
             LOGGER.error(str(err))
-            if "File not found" in str(err):
-                msg = "No such file exist"
-            else:
-                msg = str(err)
+            msg = "No such file exist" if "File not found" in str(err) else str(err)
             LOGGER.error(f"Delete Result: {msg}")
         finally:
             return msg
@@ -400,7 +397,7 @@ class GoogleDriveHelper:
         except HttpError as err:
             if err.resp.get('content-type', '').startswith('application/json'):
                 reason = json.loads(err.content).get('error').get('errors')[0].get('reason')
-                if reason == 'userRateLimitExceeded' or reason == 'dailyLimitExceeded':
+                if reason in ['userRateLimitExceeded', 'dailyLimitExceeded']:
                     if USE_SERVICE_ACCOUNTS:
                         if self.sa_count == self.service_account_count:
                             self.is_cancelled = True
@@ -816,30 +813,32 @@ class GoogleDriveHelper:
         fh = io.FileIO(f"{path}{filename}", "wb")
         downloader = MediaIoBaseDownload(fh, request, chunksize=100 * 1024 * 1024)
         done = False
-        while done is False:
+        while not done:
             if self.is_cancelled:
                 fh.close()
                 break
             try:
                 self.dstatus, done = downloader.next_chunk()
             except HttpError as err:
-                 if err.resp.get('content-type', '').startswith('application/json'):
-                     reason = json.loads(err.content).get('error').get('errors')[0].get('reason')
-                     if reason == 'downloadQuotaExceeded' or reason == 'dailyLimitExceeded':
-                        if USE_SERVICE_ACCOUNTS:
-                            if self.sa_count == self.service_account_count:
-                                self.is_cancelled = True
-                                raise err
-                            else:
-                                self.switchServiceAccount()
-                                LOGGER.info(f"Got: {reason}, Trying Again...")
-                                return self.download_file(file_id, path, filename, mime_type)
-                        else:
+                if err.resp.get('content-type', '').startswith('application/json'):
+                    reason = json.loads(err.content).get('error').get('errors')[0].get('reason')
+                    if reason not in [
+                        'downloadQuotaExceeded',
+                        'dailyLimitExceeded',
+                    ]:
+                        raise err
+                    if USE_SERVICE_ACCOUNTS:
+                        if self.sa_count == self.service_account_count:
                             self.is_cancelled = True
-                            LOGGER.info(f"Got: {reason}")
                             raise err
-                     else:
-                         raise err
+                        else:
+                            self.switchServiceAccount()
+                            LOGGER.info(f"Got: {reason}, Trying Again...")
+                            return self.download_file(file_id, path, filename, mime_type)
+                    else:
+                        self.is_cancelled = True
+                        LOGGER.info(f"Got: {reason}")
+                        raise err
         self._file_downloaded_bytes = 0
 
     def _on_download_progress(self):
@@ -867,24 +866,20 @@ class GoogleDriveHelper:
 
 
     def uni_drive_list(self, fileName):
-        search_type = None
         fileName = self.escapes(str(fileName))
-        msg = ''
-        INDEX = -1
         content_count = 0
         all_contents_count = 0
         add_title_msg = True
-        for parent_id in DRIVE_ID :
+        search_type = None
+        msg = ''
+        for INDEX, parent_id in enumerate(DRIVE_ID):
             add_drive_title = True
-            response = self.drive_query(parent_id, search_type, fileName)
-            #LOGGER.info(f"my a: {response}")
-            INDEX += 1
-            if response:
+            if response := self.drive_query(parent_id, search_type, fileName):
                 for file in response:
-                    if add_title_msg == True:
+                    if add_title_msg:
                         msg = f'<h3>I found these results for your search query: {fileName}</h3>'
                         add_title_msg = False
-                    if add_drive_title == True:
+                    if add_drive_title:
                         msg += f"<br><b>{DRIVE_NAME[INDEX]}</b><br><br>"
                         add_drive_title = False
                     if file.get('mimeType') == "application/vnd.google-apps.folder":  # Detect Whether Current Entity is a Folder or File.
@@ -964,7 +959,6 @@ class GoogleDriveHelper:
         return msg, InlineKeyboardMarkup(buttons.build_menu(1))
     
     def drive_list(self, fileName):
-        msg = ""
         fileName = self.escapes(str(fileName))
         # Create Search Query for API request.
         query = f"'{parent_id}' in parents and (name contains '{fileName}')"
@@ -975,10 +969,10 @@ class GoogleDriveHelper:
                                                pageSize=200,
                                                fields='files(id, name, mimeType, size)',
                                                orderBy='name asc').execute()
-        content_count = 0
         if not response["files"]:
             return '', ''
 
+        msg = ""
         msg += f'<h4>{len(response["files"])} Results: {fileName}</h4><br><br>'
         for file in response.get('files', []):
             if file.get('mimeType') == "application/vnd.google-apps.folder":  # Detect Whether Current Entity is a Folder or File.
@@ -1034,7 +1028,6 @@ class GoogleDriveHelper:
                         if VIEW_LINK:
                             msg += f' <b>| <a href="{urls}">View Link</a></b>'
             msg += '<br><br>'
-            content_count += 1
             if len(msg.encode('utf-8')) > 39000:
                     self.telegraph_content.append(msg)
                     msg = ""
@@ -1074,23 +1067,31 @@ class GoogleDriveHelper:
         for text in var:
             query += f"name contains '{text}' and "
         query += "trashed=false"
-        if parent_id != "root":
-            response = self.__service.files().list(supportsTeamDrives=True,
-                                                   includeTeamDriveItems=True,
-                                                   teamDriveId=parent_id,
-                                                   q=query,
-                                                   corpora='drive',
-                                                   spaces='drive',
-                                                   pageSize=1000,
-                                                   fields='files(id, name, mimeType, size, teamDriveId, parents)',
-                                                   orderBy='folder, modifiedTime desc').execute()["files"]
-        else:
-            response = self.__service.files().list(q=query + " and 'me' in owners",
-                                                   pageSize=1000,
-                                                   spaces='drive',
-                                                   fields='files(id, name, mimeType, size, parents)',
-                                                   orderBy='folder, modifiedTime desc').execute()["files"]
-        return response
+        return (
+            self.__service.files()
+            .list(
+                supportsTeamDrives=True,
+                includeTeamDriveItems=True,
+                teamDriveId=parent_id,
+                q=query,
+                corpora='drive',
+                spaces='drive',
+                pageSize=1000,
+                fields='files(id, name, mimeType, size, teamDriveId, parents)',
+                orderBy='folder, modifiedTime desc',
+            )
+            .execute()["files"]
+            if parent_id != "root"
+            else self.__service.files()
+            .list(
+                q=query + " and 'me' in owners",
+                pageSize=1000,
+                spaces='drive',
+                fields='files(id, name, mimeType, size, parents)',
+                orderBy='folder, modifiedTime desc',
+            )
+            .execute()["files"]
+        )
         
     
     def count(self, link):
@@ -1110,7 +1111,7 @@ class GoogleDriveHelper:
                 self.gDrive_directory(**drive_file)
                 msg += f'<b>Filename: </b><code>{name}</code>'
                 msg += f'\n<b>Size: </b><code>{get_readable_file_size(self.total_bytes)}</code>'
-                msg += f'\n<b>Type: </b><code>Folder</code>'
+                msg += '\n<b>Type: </b><code>Folder</code>'
                 msg += f'\n<b>SubFolders: </b><code>{self.total_folders}</code>'
                 msg += f'\n<b>Files: </b><code>{self.total_files}</code>'
             else:
@@ -1130,9 +1131,6 @@ class GoogleDriveHelper:
         except Exception as err:
             err = str(err).replace('>', '').replace('<', '')
             LOGGER.error(err)
-            if "File not found" in str(err):
-                msg = "File not found."
-            else:
-                msg = f"Error.\n{err}"
+            msg = "File not found." if "File not found" in str(err) else f"Error.\n{err}"
             return msg
         return msg

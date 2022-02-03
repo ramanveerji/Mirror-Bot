@@ -247,12 +247,12 @@ class MirrorListener(listeners.MirrorListeners):
             if LOGS_CHATS:
                 try:
                     for i in LOGS_CHATS:
-                        msg1 = f"<b>Files Leeched</b>\n"
+                        msg1 = '<b>Files Leeched</b>\n'
                         msg1 += f"<b>By:</b> {uname}\n"
                         msg1 += f'<b>Total Files:</b> {count}\n'
                         bot.sendMessage(chat_id=i, text=msg1, parse_mode=ParseMode.HTML)
                 except Exception as e:
-                    LOGGER.warning(e)                                           
+                    LOGGER.warning(e)
             with download_dict_lock:
                 try:
                     fs_utils.clean_download(download_dict[self.uid].path())
@@ -401,8 +401,23 @@ def _mirror(bot, update,isTar=False, isZip=False, extract=False, isLeech=False):
             not bot_utils.is_url(link)
             and not bot_utils.is_magnet(link)
             or len(link) == 0
-        ) and file is not None:
-            if file.mime_type != "application/x-bittorrent":
+        ):
+            if file is None:
+                reply_text = reply_to.text
+                reply_text = re.split('\n ', reply_text)[0]
+                if bot_utils.is_url(reply_text) or bot_utils.is_magnet(reply_text):
+                    link = reply_text
+
+                if not bot_utils.is_url(link) and not bot_utils.is_magnet(link) and not os.path.exists(link) :
+                    resp = requests.get(link)
+                    if resp.status_code == 200:
+                        file_name = str(time.time()).replace(".", "") + ".torrent"
+                        open(file_name, "wb").write(resp.content)
+                        link = f"{file_name}"
+                    else:
+                        sendMessage("ERROR: link got HTTP response:" + resp.status_code, bot, update)
+                        return
+            elif file.mime_type != "application/x-bittorrent":
                 listener = MirrorListener(bot, update, isTar, isZip, extract, isLeech=isLeech, pswd=pswd)
                 tg_downloader = TelegramDownloadHelper(listener)
                 ms = update.message
@@ -417,25 +432,6 @@ def _mirror(bot, update,isTar=False, isZip=False, extract=False, isLeech=False):
                 return
             else:
                 link = file.get_file().file_path
-        elif (
-              not bot_utils.is_url(link)
-              and not bot_utils.is_magnet(link)
-              or len(link) == 0
-        ) and file is None:
-            reply_text = reply_to.text
-            reply_text = re.split('\n ', reply_text)[0]
-            if bot_utils.is_url(reply_text) or bot_utils.is_magnet(reply_text):
-                link = reply_text
-
-            if not bot_utils.is_url(link) and not bot_utils.is_magnet(link) and not os.path.exists(link) :
-                resp = requests.get(link)
-                if resp.status_code == 200:
-                    file_name = str(time.time()).replace(".", "") + ".torrent"
-                    open(file_name, "wb").write(resp.content)
-                    link = f"{file_name}"
-                else:
-                    sendMessage("ERROR: link got HTTP response:" + resp.status_code, bot, update)
-                    return
     elif not bot_utils.is_url(link) and not bot_utils.is_magnet(link):
         sendMessage("No download source provided", bot, update)
         return
@@ -449,7 +445,7 @@ def _mirror(bot, update,isTar=False, isZip=False, extract=False, isLeech=False):
                 return
         if "Youtube" in str(e):
                 sendMessage(f"{e}", bot, update)
-                return    
+                return
     listener = MirrorListener(bot, update, isTar, isZip, extract, isLeech, pswd)
     if bot_utils.is_gdrive_link(link):
         if not isZip and not isTar and not extract and not isLeech:

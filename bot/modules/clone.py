@@ -26,14 +26,14 @@ def cloneNode(update, context):
     gdtot_link = is_gdtot_link(link)
     if gdtot_link:
         try:
-            msg = sendMessage(f"Bypassing GDTOT Link.", context.bot, update)
+            msg = sendMessage('Bypassing GDTOT Link.', context.bot, update)
             link = gdtot(link)
             deleteMessage(context.bot, msg)
         except DirectDownloadLinkException as e:
             deleteMessage(context.bot, msg)
             return sendMessage(str(e), context.bot, update)
     if is_gdrive_link(link):
-        msg = sendMessage(f"Checking Drive Link...", context.bot, update)
+        msg = sendMessage('Checking Drive Link...', context.bot, update)
         gd = gdriveTools.GoogleDriveHelper()
         res, size, name, files = gd.clonehelper(link)
         deleteMessage(context.bot, msg)
@@ -52,7 +52,7 @@ def cloneNode(update, context):
             if result:
                 msg2 = f'Failed, Clone limit is {CLONE_LIMIT}.\nYour File/Folder size is {get_readable_file_size(size)}.'
                 sendMessage(msg2, context.bot, update)
-                return        
+                return
         if files < 15:
             msg = sendMessage(f"Cloning: <code>{link}</code>", context.bot, update)
             result, button = gd.clone(link)
@@ -100,7 +100,7 @@ def cloneNode(update, context):
                 except Exception as e:
                     LOGGER.warning(e)
         if gdtot_link:
-            gd.deletefile(link)                                                     
+            gd.deletefile(link)
     else:
         sendMessage('Provide G-Drive Or Gdtot Shareable Link to Clone.', context.bot, update)
         

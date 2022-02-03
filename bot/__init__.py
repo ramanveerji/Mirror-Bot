@@ -33,9 +33,7 @@ logging.basicConfig(
     handlers=[logging.FileHandler("log.txt"), logging.StreamHandler()],
     level=logging.INFO,
 )
-#Config And Heroku Support
-CONFIG_FILE_URL = os.environ.get('CONFIG_FILE_URL')
-if CONFIG_FILE_URL:
+if CONFIG_FILE_URL := os.environ.get('CONFIG_FILE_URL'):
     if len(CONFIG_FILE_URL) == 0:
             CONFIG_FILE_URL = None
     if CONFIG_FILE_URL is not None:
@@ -96,21 +94,15 @@ if os.path.exists('drive_folder'):
                 UNI_INDEX_URL.append(None)
 try:
     RECURSIVE_SEARCH = getConfig("RECURSIVE_SEARCH")
-    if RECURSIVE_SEARCH.lower() == "true":
-        RECURSIVE_SEARCH = True
-    else:
-        RECURSIVE_SEARCH = False
+    RECURSIVE_SEARCH = RECURSIVE_SEARCH.lower() == "true"
 except KeyError:
     RECURSIVE_SEARCH = False
-                
 
-if RECURSIVE_SEARCH:
-    if DRIVE_ID:
-        pass
-    else :
-        LOGGER.error("Fill Drive_Folder File For Multi Drive Search!")
-        exit(1)    
-        
+
+if RECURSIVE_SEARCH and not DRIVE_ID:
+    LOGGER.error("Fill Drive_Folder File For Multi Drive Search!")
+    exit(1)    
+
 
 aria2 = aria2p.API(
     aria2p.Client(
@@ -134,7 +126,6 @@ def aria2c_init():
                 aria2.remove([download], force=True, files=True)
     except Exception as e:
         logging.error(f"Aria2c initializing error: {e}")
-        pass
 
 threading.Thread(target=aria2c_init).start()
 time.sleep(0.5)
@@ -195,8 +186,6 @@ try:
         LOGS_CHATS.add(int(chats))
 except:
     logging.warning('Logs Chat Details not provided!')
-    pass
-
 try:
     PHPSESSID = getConfig('PHPSESSID')
     CRYPT = getConfig('CRYPT')
@@ -327,10 +316,7 @@ except KeyError:
 
 try:
     USE_SERVICE_ACCOUNTS = getConfig("USE_SERVICE_ACCOUNTS")
-    if USE_SERVICE_ACCOUNTS.lower() == "true":
-        USE_SERVICE_ACCOUNTS = True
-    else:
-        USE_SERVICE_ACCOUNTS = False
+    USE_SERVICE_ACCOUNTS = USE_SERVICE_ACCOUNTS.lower() == "true"
 except KeyError:
     USE_SERVICE_ACCOUNTS = False
 
@@ -373,10 +359,7 @@ except KeyError:
 #VIEW_LINK
 try:
     VIEW_LINK = getConfig('VIEW_LINK')
-    if VIEW_LINK.lower() == 'true':
-        VIEW_LINK = True
-    else:
-        VIEW_LINK = False
+    VIEW_LINK = VIEW_LINK.lower() == 'true'
 except KeyError:
     VIEW_LINK = False
 #CLONE
@@ -389,10 +372,7 @@ except KeyError:
 
 try:
     STOP_DUPLICATE_CLONE = getConfig('STOP_DUPLICATE_CLONE')
-    if STOP_DUPLICATE_CLONE.lower() == 'true':
-        STOP_DUPLICATE_CLONE = True
-    else:
-        STOP_DUPLICATE_CLONE = False
+    STOP_DUPLICATE_CLONE = STOP_DUPLICATE_CLONE.lower() == 'true'
 except KeyError:
     STOP_DUPLICATE_CLONE = False
 #HEROKUSUPPORT    
